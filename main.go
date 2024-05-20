@@ -56,11 +56,20 @@ func MakeParamsList(raw string) []parameter {
 				isBasicType = true
 			}
 		}
+
+		if pType == "void" {
+			isPtr = true
+		}
+
 		if !isBasicType {
 			pName = strings.Split(p, " ")[1]
 		} else {
 			pName = p
 		}
+		if pName == "this" {
+			pName = "this_ptr"
+		}
+
 		params = append(params, parameter{
 			Name:        pName,
 			Type:        pType,
@@ -72,7 +81,13 @@ func MakeParamsList(raw string) []parameter {
 	return params
 }
 
-func Generate(str string) {
+// 0x0000000180001000
+func Generate(str string, is32 bool) {
+
+	var baseAddress int64 = 0x0000000180000000
+	if is32 {
+		baseAddress = 0x0000000010000000
+	}
 
 	t := strings.Split(str, ":")
 	binarySection := t[0]
@@ -93,7 +108,7 @@ func Generate(str string) {
 	functionName := strings.TrimSpace(t[2])
 
 	addrVal, _ := strconv.ParseInt(addr, 16, 64)
-	offsetVal := addrVal - 0x0000000180000000
+	offsetVal := addrVal - baseAddress
 
 	params := MakeParamsList(rawParams)
 
@@ -129,7 +144,7 @@ func Generate(str string) {
 			}
 		}
 		fmt.Print("){\n")
-		fmt.Printf("\tLOG(\"%v called\")\n\t", prettyFunctionName)
+		fmt.Printf("\tLOG(\"%v called\");\n\t", prettyFunctionName)
 
 		if !strings.HasPrefix(retType, "void") {
 			fmt.Print("return ")
@@ -146,7 +161,7 @@ func Generate(str string) {
 	}
 	//Print hook data struct
 	{
-		fmt.Printf("hook_data hk_%v = {\n\t(void*)hooked_%v,\n\t(void**)&o_%v,\n\t\"%v\",\n\t0x%016X\n};\n",
+		fmt.Printf("hook_data hk_%v = {\n\t(void*)hooked_%v,\n\t(void**)&o_%v,\n\t\"%v\",\n\t0x%016X,\n\tpattern_scan::aob({})\n};\n",
 			functionName, functionName, functionName, prettyFunctionName, offsetVal)
 	}
 
@@ -159,7 +174,12 @@ func main() {
 		return
 	}
 
-	Generate(os.Args[1])
+	is32Bit := false
+	if len(os.Args) == 3 && os.Args[2] == "-32" {
+		is32Bit = true
+	}
+
+	Generate(os.Args[1], is32Bit)
 	//Generate("il2cpp:000000018077F4B0; void __stdcall Quests_QuestController__AddEnginePart(int32_t id, int32_t count, const MethodInfo* method)")
 	//Generate("il2cpp:0000000180C079C0 ; float __stdcall DriftController__GetDriftAngle(DriftController_o *this, CarX_Car_o *car, float *dotProduct, const MethodInfo *method)")
 
